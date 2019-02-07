@@ -111,9 +111,11 @@ private:
     bitmap_file_header_t *m_bitmapFileHeader;   // File header structure
     bitmap_info_header_t *m_bitmapInfoHeader;   // Info header structure
 
-    int m_imageSize;                            // Size of image- (width x height)
+    int m_imageSize;                            // Size of image
+    int m_paddedImageSize;                            // Size of image including padding
     int m_modifiedImageSize;                    // Size of modified image
 
+    void allocateModifiedImageBuffer();
 
 public:
     BitmapImage(const char *imagePath);
@@ -128,6 +130,7 @@ public:
     void displayImageDetails();
     void displayImagePixels();
     int writeModifiedImageDataToFile(const char *outputFilePath);
+    int modify1();
 };
 
 

@@ -13,7 +13,7 @@
 static void CloseFile(FILE *fp)
 {
     int retval = 0;
-    if (!fp)
+    if (fp)
     {
         retval = fclose(fp);
         if (!retval)
@@ -48,7 +48,8 @@ static void FreeMemory(void *ptr)
 //******************************************************************************************
 // @name                    : BitmapImage
 //
-// @description             : Constructor
+// @description             : Constructor. Opens the input image, extracts and stores header 
+//                            information image pixels.
 //
 // @param imagePath         : Path of image that will be loaded
 //
@@ -73,12 +74,21 @@ BitmapImage::BitmapImage(const char *imagePath)
 
     m_bitmapHeaderChar = LoadBitmapHeader();
     m_bitmapFileHeader = LoadBitmapFileImageHeader();
+
+    //Check if this is a Bitmap image
+    if ("BM" != getSignatureString())
+    {
+        printf("ERROR: Cannot process non-bitmap image files!\n");
+        assert(0);
+    }
+
     m_bitmapInfoHeader = LoadBitmapInfoImageHeader();
     m_bitmapImageChar = LoadBitmapImagePixels();
 
     // Modified buffers. To be used if required
     m_modifiedBitmapHeaderChar = nullptr;
     m_modifiedBitmapImageChar = nullptr;
+    m_modifiedImageSize = 0;
 
     assert(m_bitmapFileHeader);
     assert(m_bitmapInfoHeader);
@@ -108,9 +118,10 @@ BitmapImage::~BitmapImage()
 //******************************************************************************************
 // @name                    : LoadBitmapHeader
 //
-// @description             : 
+// @description             : Extracts Bitmap image header from image 
+//                            containing InfoHeader and FileHeader to a character array.
 //
-// @returns                 : 
+// @returns                 : Pointer to character array 
 //********************************************************************************************
 char* BitmapImage::LoadBitmapHeader()
 {
@@ -133,11 +144,9 @@ char* BitmapImage::LoadBitmapHeader()
 //******************************************************************************************
 // @name                    : LoadBitmapFileImageHeader
 //
-// @description             : 
+// @description             : Stores the FileHeader to a structure
 //
-// @param imagePath         : 
-//
-// @returns                 : 
+// @returns                 : Pointer to FileHeader
 //********************************************************************************************
 bitmap_file_header_t* BitmapImage::LoadBitmapFileImageHeader()
 {
@@ -163,11 +172,9 @@ bitmap_file_header_t* BitmapImage::LoadBitmapFileImageHeader()
 //******************************************************************************************
 // @name                    : LoadBitmapInfoImageHeader
 //
-// @description             : 
+// @description             : Stores the InfoHeader to a structure
 //
-// @param imagePath         : 
-//
-// @returns                 : 
+// @returns                 : Pointer to InfoHeader
 //********************************************************************************************
 bitmap_info_header_t* BitmapImage::LoadBitmapInfoImageHeader()
 {
@@ -201,10 +208,7 @@ bitmap_info_header_t* BitmapImage::LoadBitmapInfoImageHeader()
     info_header->blueIntensity = *(char*)&m_bitmapHeaderChar[BLUE_INTENSITY];
 
     m_imageSize = info_header->width * info_header->height;
-    if (info_header->bitsPerPixel == BITS_24_RGB)
-    {
-        m_imageSize = m_imageSize * 3; // One for each of R, G and B
-    }
+    //m_imageSize = m_bitmapFileHeader->fileSize - m_bitmapFileHeader->dataOffset;
 
     return info_header;
 }
@@ -212,11 +216,9 @@ bitmap_info_header_t* BitmapImage::LoadBitmapInfoImageHeader()
 //******************************************************************************************
 // @name                    : LoadBitmapImagePixels
 //
-// @description             : 
+// @description             : Loads the actual image data (pixel values)
 //
-// @param imagePath         : 
-//
-// @returns                 : 
+// @returns                 : Pointer to image data.
 //********************************************************************************************
 unsigned char* BitmapImage::LoadBitmapImagePixels()
 {
@@ -230,16 +232,27 @@ unsigned char* BitmapImage::LoadBitmapImagePixels()
     }
 
     printf("\nReading Bitmap pixels...\n");
-    unsigned char *bitmap_pixels = (unsigned char *)malloc(sizeof(unsigned char) * (m_imageSize + 1));
+    int row_padded = (m_bitmapInfoHeader->width * 3 + 3) & (~3); // padded row length
+    int bytesRead = 0;
+    int totalBytesRead = 0;
 
+    unsigned char *bitmap_pixels = (unsigned char *)malloc(sizeof(unsigned char) * (row_padded * m_bitmapInfoHeader->height));
     if (!bitmap_pixels)
     {
         printf("ERROR: Malloc Failure!\n");
         assert(0);
     }
 
-    memset(bitmap_pixels, 0, sizeof(bitmap_pixels));
-    fread(bitmap_pixels, sizeof(unsigned char), m_imageSize, m_inputFilePointer);
+    memset(bitmap_pixels, 0, row_padded * m_bitmapInfoHeader->height);
+
+    for (int i = 0; i < m_bitmapInfoHeader->height; i++)
+    {
+        bytesRead = fread(&bitmap_pixels[bytesRead], sizeof(unsigned char), row_padded, m_inputFilePointer);
+        totalBytesRead += bytesRead;
+        // TODO: We can prepare a 2-D pixel array here
+    }
+
+    m_paddedImageSize = totalBytesRead;
 
     return bitmap_pixels;
 }
@@ -249,9 +262,9 @@ unsigned char* BitmapImage::LoadBitmapImagePixels()
 //
 // @description             : 
 //
-// @param val         : 
+// @param val               : BitsPerPixel/ImageDepth from image header
 //
-// @returns                 : 
+// @returns                 : Description of this parameter in string format
 //********************************************************************************************
 char* BitmapImage::getBitsPerPixelInfoFromNumber(short val)
 {
@@ -286,9 +299,9 @@ char* BitmapImage::getBitsPerPixelInfoFromNumber(short val)
 //
 // @description             : 
 //
-// @param val         : 
+// @param val               : Compression Type value from image header
 //
-// @returns                 : 
+// @returns                 : Description of compression type
 //********************************************************************************************
 char* BitmapImage::getBitsCompressionTypeFromNumber(int val)
 {
@@ -315,9 +328,7 @@ char* BitmapImage::getBitsCompressionTypeFromNumber(int val)
 //
 // @description             : Get signature text from its coded value.
 //
-// @param val               : 
-//
-// @returns                 : 
+// @returns                 : Human readable text form of Signature specified in image header
 //********************************************************************************************
 string BitmapImage::getSignatureString()
 {
@@ -333,9 +344,9 @@ string BitmapImage::getSignatureString()
 //******************************************************************************************
 // @name                    : displayImageDetails
 //
-// @description             : 
+// @description             : Display image header information.
 //
-// @returns                 : 
+// @returns                 : Nothing
 //********************************************************************************************
 void BitmapImage::displayImageDetails()
 {
@@ -375,50 +386,61 @@ void BitmapImage::displayImageDetails()
 //
 // @description             : 
 //
-// @returns                 : 
+// @returns                 : Nothing
 //********************************************************************************************
 void BitmapImage::displayImagePixels()
 {
     printf("\n\n-------------------------------------------------------------\n");
     printf("Image Pixels Information:\n");
     printf("-------------------------------------------------------------\n");
-    int row = 1;
+
+    int row_padded = (m_bitmapInfoHeader->width * 3 + 3) & (~3); // padded row length
 
     // For color image (rgb)
-    if (m_bitmapInfoHeader->bitsPerPixel == BITS_24_RGB)
-    {
-        for (int i = 0; i < m_imageSize; /* Not required */)
-        {
-            int b = m_bitmapImageChar[i];
-            int g = m_bitmapImageChar[i++];
-            int r = m_bitmapImageChar[i++];
+    // Formula: val(i,j) = imgArray[width * i + j]
+    //                   = pixelValue[i][j] = m_bitmapImageChar[row_padded * i + j];
 
-            printf("(%02d,%02d,%02d) ", r, g, b);
-            if (i != 0 && i % m_bitmapInfoHeader->width == 0)
-            {
-                printf("\n");
-                row++;
-            }
-        }
-    }
-    else
+    for (int i = 0; i < m_bitmapInfoHeader->height; i++)
     {
-        for (int i = 0; i < m_imageSize; i++)
+        int j = 0;
+        while (j < row_padded)
         {
-            printf("%02d ", m_bitmapImageChar[i]);
-            if (i != 0 && i % m_bitmapInfoHeader->width == 0)
+            if (j >= (m_bitmapInfoHeader->width * 3))
             {
-                printf("\n");
-                row++;
+                // Reached end of pixels in a row. Rest of the values
+                // in this row are padding
+                printf("*** PADDING (j_idx: %d) ****\n", j);
+                break;
             }
+
+            unsigned char *bluePixelValue = &m_bitmapImageChar[row_padded * i + j++];
+            unsigned char *greenPixelValue = &m_bitmapImageChar[row_padded * i + j++];
+            unsigned char *redPixelValue = &m_bitmapImageChar[row_padded * i + j++];
+            printf("(%02d,%02d,%02d) ", *redPixelValue, *greenPixelValue, *bluePixelValue);
         }
+        printf("*** HEIGHT (i_idx: %d) ***\n", i);
     }
+
+#if 0
+    int i = 0;
+    while (i < m_bitmapInfoHeader->height)
+    {
+        unsigned char *bluePixelValue = &m_bitmapImageChar[i++];
+        unsigned char *greenPixelValue = &m_bitmapImageChar[i++];
+        unsigned char *redPixelValue = &m_bitmapImageChar[i++];
+
+        printf("(%02d,%02d,%02d) ", *redPixelValue, *greenPixelValue, *bluePixelValue);
+    }
+#endif
+
 }
 
 //******************************************************************************************
 // @name                    : writeModifiedImageDataToFile
 //
-//@description              : Write the modified image to output file
+//@description              : Write the modified image to output file. If there is no 
+//                            modification to the image, then make a copy of the original
+//                            image and write to outputFilePath
 //
 // @param outputFilePath    : Path of file
 //
@@ -435,8 +457,7 @@ int BitmapImage::writeModifiedImageDataToFile(const char *outputFilePath)
     }
 
     // Open file for writing
-    FILE *outfile = nullptr;
-    outfile = fopen(outputFilePath, "wb");
+    FILE *outfile = fopen(outputFilePath, "wb");
     if (outfile == nullptr)
     {
         printf("Cannot create file [%s]\n", outputFilePath);
@@ -460,19 +481,15 @@ int BitmapImage::writeModifiedImageDataToFile(const char *outputFilePath)
         assert(0);
     }
 
-    // Write image data
-    m_modifiedImageSize = m_imageSize;  // For now, simply make a copy of the existing image
-    m_modifiedBitmapImageChar = (unsigned char *)malloc(m_modifiedImageSize + 1);
+    // No modified image. Simply write the same image to output file.
     if (m_modifiedBitmapImageChar == nullptr)
     {
-        printf("ERROR: Malloc Failure!\n");
-        assert(0);
+        this->allocateModifiedImageBuffer();
+        printf("\nINFO: No modification to image. Making copy of original\n");
     }
 
-    memset(m_modifiedBitmapImageChar, 0, sizeof(m_modifiedImageSize) + 1);
-    memcpy(m_modifiedBitmapImageChar, m_bitmapImageChar, m_modifiedImageSize);
-
-    retval = fwrite(m_modifiedBitmapImageChar, sizeof(unsigned char), m_modifiedImageSize, outfile);
+    // Write modified image data
+    retval = fwrite(m_modifiedBitmapImageChar, sizeof(unsigned char), m_paddedImageSize, outfile);
     if (retval == 0)
     {
         printf("ERROR: Content write error!\n");
@@ -480,6 +497,59 @@ int BitmapImage::writeModifiedImageDataToFile(const char *outputFilePath)
     }
 
     CloseFile(outfile);
+
+    return 0;
+}
+
+//******************************************************************************************
+// @name                    : allocateModifiedImageBuffer
+//
+//@description              : Allocate memory to modified image buffer. The image size is
+//                            same as the original image.
+//
+// @returns                 : Nothing
+//********************************************************************************************
+void BitmapImage::allocateModifiedImageBuffer()
+{
+    m_modifiedImageSize = m_imageSize;  // Same size image
+    m_modifiedBitmapImageChar = (unsigned char *)malloc(m_paddedImageSize);
+    if (m_modifiedBitmapImageChar == nullptr)
+    {
+        printf("ERROR: Malloc Failure!\n");
+        assert(0);
+    }
+
+    memset(m_modifiedBitmapImageChar, 0, m_paddedImageSize);
+    memcpy(m_modifiedBitmapImageChar, m_bitmapImageChar, m_paddedImageSize);
+}
+
+int BitmapImage::modify1()
+{
+    int i = 0;
+    int retval = -1;
+
+    this->allocateModifiedImageBuffer();
+
+#if 0
+    while (1)
+    {
+        unsigned char *bluePixelValue = &m_modifiedBitmapImageChar[i++];
+        if (i >= m_modifiedImageSize)
+            break;
+
+        unsigned char *greenPixelValue = &m_modifiedBitmapImageChar[i++];
+        if (i >= m_modifiedImageSize)
+            break;
+
+        unsigned char *redPixelValue = &m_modifiedBitmapImageChar[i++];
+        if (i >= m_modifiedImageSize)
+            break;
+
+        *redPixelValue = 255;
+        //*greenPixelValue = 255;
+        *bluePixelValue = 255;
+    }
+#endif
 
     return 0;
 }
