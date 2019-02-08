@@ -1,6 +1,7 @@
 #include"bmp.h"
 #include<assert.h>
 
+
 //******************************************************************************************
 // @name                    : CloseFile
 //
@@ -13,7 +14,7 @@
 static void CloseFile(FILE *fp)
 {
     int retval = 0;
-    if (fp)
+    if (fp != nullptr)
     {
         retval = fclose(fp);
         if (!retval)
@@ -38,7 +39,7 @@ static void CloseFile(FILE *fp)
 //********************************************************************************************
 static void FreeMemory(void *ptr)
 {
-    if (ptr)
+    if (ptr != nullptr)
     {
         free(ptr);
         ptr = nullptr;
@@ -89,6 +90,9 @@ BitmapImage::BitmapImage(const char *imagePath)
     m_modifiedBitmapHeaderChar = nullptr;
     m_modifiedBitmapImageChar = nullptr;
     m_modifiedImageSize = 0;
+
+    // Prepare histogram from fetched data
+    this->prepareHistogram();
 
     assert(m_bitmapFileHeader);
     assert(m_bitmapInfoHeader);
@@ -232,27 +236,29 @@ unsigned char* BitmapImage::LoadBitmapImagePixels()
     }
 
     printf("\nReading Bitmap pixels...\n");
-    int row_padded = (m_bitmapInfoHeader->width * 3 + 3) & (~3); // padded row length
+    m_paddedWidth = (m_bitmapInfoHeader->width * 3 + 3) & (~3); // padded row length
     int bytesRead = 0;
     int totalBytesRead = 0;
+    m_paddedImageSize = m_paddedWidth * m_bitmapInfoHeader->height;
 
-    unsigned char *bitmap_pixels = (unsigned char *)malloc(sizeof(unsigned char) * (row_padded * m_bitmapInfoHeader->height));
+    unsigned char *bitmap_pixels = (unsigned char *)malloc(sizeof(unsigned char) * (m_paddedImageSize));
     if (!bitmap_pixels)
     {
         printf("ERROR: Malloc Failure!\n");
         assert(0);
     }
 
-    memset(bitmap_pixels, 0, row_padded * m_bitmapInfoHeader->height);
+    memset(bitmap_pixels, 0, m_paddedImageSize);
+    bytesRead = fread(bitmap_pixels, sizeof(unsigned char), m_paddedImageSize, m_inputFilePointer);
 
+#if 0
     for (int i = 0; i < m_bitmapInfoHeader->height; i++)
     {
-        bytesRead = fread(&bitmap_pixels[bytesRead], sizeof(unsigned char), row_padded, m_inputFilePointer);
+        bytesRead = fread(&bitmap_pixels[m_paddedImageSize - m_paddedWidth], sizeof(unsigned char), m_paddedWidth, m_inputFilePointer);
         totalBytesRead += bytesRead;
         // TODO: We can prepare a 2-D pixel array here
     }
-
-    m_paddedImageSize = totalBytesRead;
+#endif
 
     return bitmap_pixels;
 }
@@ -394,45 +400,110 @@ void BitmapImage::displayImagePixels()
     printf("Image Pixels Information:\n");
     printf("-------------------------------------------------------------\n");
 
-    int row_padded = (m_bitmapInfoHeader->width * 3 + 3) & (~3); // padded row length
-
     // For color image (rgb)
     // Formula: val(i,j) = imgArray[width * i + j]
-    //                   = pixelValue[i][j] = m_bitmapImageChar[row_padded * i + j];
+    //                   = pixelValue[i][j] = m_bitmapImageChar[m_paddedWidth * i + j];
 
     for (int i = 0; i < m_bitmapInfoHeader->height; i++)
     {
         int j = 0;
-        while (j < row_padded)
+        while (j < m_paddedWidth)
         {
             if (j >= (m_bitmapInfoHeader->width * 3))
             {
                 // Reached end of pixels in a row. Rest of the values
                 // in this row are padding
-                printf("*** PADDING (j_idx: %d) ****\n", j);
                 break;
             }
 
-            unsigned char *bluePixelValue = &m_bitmapImageChar[row_padded * i + j++];
-            unsigned char *greenPixelValue = &m_bitmapImageChar[row_padded * i + j++];
-            unsigned char *redPixelValue = &m_bitmapImageChar[row_padded * i + j++];
+            unsigned char *bluePixelValue  = &m_bitmapImageChar[m_paddedWidth * i + j++];
+            unsigned char *greenPixelValue = &m_bitmapImageChar[m_paddedWidth * i + j++];
+            unsigned char *redPixelValue   = &m_bitmapImageChar[m_paddedWidth * i + j++];
+
             printf("(%02d,%02d,%02d) ", *redPixelValue, *greenPixelValue, *bluePixelValue);
         }
-        printf("*** HEIGHT (i_idx: %d) ***\n", i);
     }
+}
 
-#if 0
-    int i = 0;
-    while (i < m_bitmapInfoHeader->height)
+//******************************************************************************************
+// @name                    : prepareHistogram
+//
+//@description              : Prepares histogram of input image
+//
+// @returns                 : Nothing
+//********************************************************************************************
+void BitmapImage::prepareHistogram()
+{
+    printf("\nPreparing histogram information...\n");
+    for (int i = 0; i < m_bitmapInfoHeader->height; i++)
     {
-        unsigned char *bluePixelValue = &m_bitmapImageChar[i++];
-        unsigned char *greenPixelValue = &m_bitmapImageChar[i++];
-        unsigned char *redPixelValue = &m_bitmapImageChar[i++];
+        int j = 0;
+        while (j < m_paddedWidth)
+        {
+            if (j >= (m_bitmapInfoHeader->width * 3))
+            {
+                // Reached end of pixels in a row. Rest of the values
+                // in this row are padding
+                break;
+            }
 
-        printf("(%02d,%02d,%02d) ", *redPixelValue, *greenPixelValue, *bluePixelValue);
+            pixel_value_t pixelValue;
+            pixelValue.blue  = &m_bitmapImageChar[m_paddedWidth * i + j++];
+            pixelValue.green = &m_bitmapImageChar[m_paddedWidth * i + j++];
+            pixelValue.red   = &m_bitmapImageChar[m_paddedWidth * i + j++];
+
+            m_redPixelCountMap[*(pixelValue.red)]++;
+            m_greenPixelCountMap[*(pixelValue.blue)]++;
+            m_bluePixelCountMap[*(pixelValue.green)]++;
+        }
     }
-#endif
+}
 
+//******************************************************************************************
+// @name                    : displayHistogram
+//
+//@description              : Displays the histogram
+//
+// @returns                 : Nothing
+//********************************************************************************************
+void BitmapImage::displayHistogram()
+{
+    printf("\n\n------------------------------------------------------------------------------------\n");
+    printf("H I S T O G R A M:  ");
+    printf("Intensity Level - Number of pixels at that intenstiy level\n");
+    printf("------------------------------------------------------------------------------------\n");
+    for (int i = 0; i < MAX_COLORS; i++)
+    {
+        
+        unsigned long scaledDownPixelValueCount = 0;
+        unsigned long redPixelCount   = m_redPixelCountMap[i];
+        unsigned long greenPixelCount = m_greenPixelCountMap[i];
+        unsigned long bluePixelCount  = m_bluePixelCountMap[i];
+
+        printf("%03d:", i);
+        scaledDownPixelValueCount = (HISTOGRAM_SCALING_FACTOR * redPixelCount) / m_imageSize;
+        for (unsigned long i = 0; i < scaledDownPixelValueCount; i++)
+        {
+            printf("R");
+        }
+        printf("\n");
+
+        printf("%03d:", i);
+        scaledDownPixelValueCount = (HISTOGRAM_SCALING_FACTOR * greenPixelCount) / m_imageSize;
+        for (unsigned long i = 0; i < scaledDownPixelValueCount; i++)
+        {
+            printf("G");
+        }
+        printf("\n");
+
+        printf("%03d:", i);
+        scaledDownPixelValueCount = (HISTOGRAM_SCALING_FACTOR * bluePixelCount) / m_imageSize;
+        for (unsigned long i = 0; i < scaledDownPixelValueCount; i++)
+        {
+            printf("B");
+        }
+        printf("\n");
+    }
 }
 
 //******************************************************************************************
@@ -511,18 +582,30 @@ int BitmapImage::writeModifiedImageDataToFile(const char *outputFilePath)
 //********************************************************************************************
 void BitmapImage::allocateModifiedImageBuffer()
 {
-    m_modifiedImageSize = m_imageSize;  // Same size image
-    m_modifiedBitmapImageChar = (unsigned char *)malloc(m_paddedImageSize);
+    // Allocate memory only if not already allocated
     if (m_modifiedBitmapImageChar == nullptr)
     {
-        printf("ERROR: Malloc Failure!\n");
-        assert(0);
+        m_modifiedBitmapImageChar = (unsigned char *)malloc(m_paddedImageSize);
+        if (m_modifiedBitmapImageChar == nullptr)
+        {
+            printf("ERROR: Malloc Failure!\n");
+            assert(0);
+        }
     }
 
+    m_modifiedImageSize = m_imageSize;  // Same size image. Not used as of now
     memset(m_modifiedBitmapImageChar, 0, m_paddedImageSize);
     memcpy(m_modifiedBitmapImageChar, m_bitmapImageChar, m_paddedImageSize);
+
 }
 
+//******************************************************************************************
+// @name                    : modify1
+//
+//@description              : Do some modification to image.
+//
+// @returns                 : return value
+//********************************************************************************************
 int BitmapImage::modify1()
 {
     int i = 0;
@@ -530,26 +613,30 @@ int BitmapImage::modify1()
 
     this->allocateModifiedImageBuffer();
 
-#if 0
-    while (1)
+    for (int i = 0; i < m_bitmapInfoHeader->height; i++)
     {
-        unsigned char *bluePixelValue = &m_modifiedBitmapImageChar[i++];
-        if (i >= m_modifiedImageSize)
-            break;
+        int j = 0;
+        while (j < m_paddedWidth)
+        {
+            if (j >= (m_bitmapInfoHeader->width * 3))
+            {
+                // Reached end of pixels in a row. Rest of the values
+                // in this row are padding
+                break;
+            }
 
-        unsigned char *greenPixelValue = &m_modifiedBitmapImageChar[i++];
-        if (i >= m_modifiedImageSize)
-            break;
+            pixel_value_t pixelValue;
+            pixelValue.blue  = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
+            pixelValue.green = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
+            pixelValue.red   = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
 
-        unsigned char *redPixelValue = &m_modifiedBitmapImageChar[i++];
-        if (i >= m_modifiedImageSize)
-            break;
+            // Do modification to individual pixels here
+            *pixelValue.red = 255;
+            //*pixelValue.green = 255;
+            //*pixelValue.blue = 255;
 
-        *redPixelValue = 255;
-        //*greenPixelValue = 255;
-        *bluePixelValue = 255;
-    }
-#endif
+        }
+}
 
     return 0;
 }

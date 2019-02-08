@@ -5,8 +5,8 @@
 
 using namespace std;
 
-const char* INPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img6.bmp";
-const char* OUTPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img6_modified.bmp";
+const char* INPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img1.bmp";
+const char* OUTPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img1_modified.bmp";
 
 //******************************************************************************************
 // M A I N - for testing purpose.
@@ -19,8 +19,8 @@ int main()
         BitmapImage bmpImage(INPUT_IMAGE_PATH);
 
         bmpImage.displayImageDetails();
-        bmpImage.displayImagePixels();
-        //retval = bmpImage.modify1();
+        //bmpImage.displayImagePixels();
+        retval = bmpImage.modify1();
         if (retval != 0)
         {
             printf("\nERROR: Image modification failed!\n");
@@ -36,6 +36,8 @@ int main()
         {
             printf("\n>> Created %s\n", OUTPUT_IMAGE_PATH);
         }
+
+        bmpImage.displayHistogram();
 
     }//Scope of BitmapImage object ends here
 

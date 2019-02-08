@@ -1,6 +1,8 @@
 #ifndef _BMP_H_
 #define _BMP_H_
 #include<string>
+#include<vector>
+#include<map>
 
 using namespace std;
 
@@ -11,6 +13,8 @@ const int BITMAP_FILE_HEADER_SIZE = 14;
 const int BITMAP_INFO_HEADER_SIZE = 40;
 const int BITMAP_HEADER_SIZE = BITMAP_FILE_HEADER_SIZE + BITMAP_INFO_HEADER_SIZE;
 const int COLOR_TABLE_SIZE = 1024;
+const int MAX_COLORS = 256;
+const unsigned long HISTOGRAM_SCALING_FACTOR = 10000;
 
 // ==================================================================================================
 // Enums
@@ -63,6 +67,13 @@ typedef enum compression_type_tag
     COMPRESSION_RLE4 = 2
 }compression_type_t;
 
+typedef enum color_tag
+{
+    RED,
+    GREEN,
+    BLUE
+}color_t;
+
 // ==================================================================================================
 // Structures
 // ==================================================================================================
@@ -92,6 +103,12 @@ typedef struct bitmap_info_header_tag
     char blueIntensity;
 }bitmap_info_header_t;
 
+typedef struct pixel_value_tag
+{
+    unsigned char *red;
+    unsigned char *green;
+    unsigned char *blue;
+}pixel_value_t;
 
 // ==================================================================================================
 // BitmapImage class definition
@@ -99,23 +116,29 @@ typedef struct bitmap_info_header_tag
 class BitmapImage
 {
 private:
-    FILE *m_inputFilePointer;                   // Image file pointer
-    std::string m_imagePath;                    // Image path
+    FILE *m_inputFilePointer;                         // Image file pointer
+    std::string m_imagePath;                          // Image path
 
-    char *m_bitmapHeaderChar;                   // Character array of the entire bitmap header - 54 bytes
-    unsigned char *m_bitmapImageChar;           // Character array of the entire bitmap image pixels
+    char *m_bitmapHeaderChar;                         // Character array of the entire bitmap header - 54 bytes
+    unsigned char *m_bitmapImageChar;                 // Character array of the entire bitmap image pixels
 
-    char *m_modifiedBitmapHeaderChar;           // Modified Character array of the entire bitmap header - 54 bytes
-    unsigned char *m_modifiedBitmapImageChar;   // Modified Character array of the entire bitmap image pixels
+    char *m_modifiedBitmapHeaderChar;                 // Modified Character array of the entire bitmap header - 54 bytes
+    unsigned char *m_modifiedBitmapImageChar;         // Modified Character array of the entire bitmap image pixels
 
-    bitmap_file_header_t *m_bitmapFileHeader;   // File header structure
-    bitmap_info_header_t *m_bitmapInfoHeader;   // Info header structure
+    bitmap_file_header_t *m_bitmapFileHeader;         // File header structure
+    bitmap_info_header_t *m_bitmapInfoHeader;         // Info header structure
 
-    int m_imageSize;                            // Size of image
-    int m_paddedImageSize;                            // Size of image including padding
-    int m_modifiedImageSize;                    // Size of modified image
+    unsigned long m_imageSize;                        // Size of image
+    int m_paddedWidth;                                // Padded width (this will be same as width of image if no padding is done)
+    unsigned long m_paddedImageSize;                  // Size of image including padding
+    unsigned long m_modifiedImageSize;                // Size of modified image
+
+    map<int, unsigned long> m_redPixelCountMap;       // Map of red-color intensity and number of pixels in that intensity level
+    map<int, unsigned long> m_greenPixelCountMap;     // Map of green-color intensity and number of pixels in that intensity level
+    map<int, unsigned long> m_bluePixelCountMap;      // Map of blue-color intensity and number of pixels in that intensity level
 
     void allocateModifiedImageBuffer();
+    void prepareHistogram();
 
 public:
     BitmapImage(const char *imagePath);
@@ -129,6 +152,7 @@ public:
     string getSignatureString();
     void displayImageDetails();
     void displayImagePixels();
+    void displayHistogram();
     int writeModifiedImageDataToFile(const char *outputFilePath);
     int modify1();
 };
