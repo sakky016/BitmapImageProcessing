@@ -19,7 +19,8 @@ int main()
         BitmapImage bmpImage(INPUT_IMAGE_PATH);
 
         bmpImage.displayImageDetails();
-        //bmpImage.displayImagePixels();
+#if 0
+        bmpImage.displayImagePixels();
         retval = bmpImage.modify1();
         if (retval != 0)
         {
@@ -36,8 +37,23 @@ int main()
         {
             printf("\n>> Created %s\n", OUTPUT_IMAGE_PATH);
         }
+#endif
+        //bmpImage.displayHistogram();
 
-        bmpImage.displayHistogram();
+        printf("\n\nDoing histogram equalization...\n");
+        bmpImage.doHistogramEqualization();
+        //bmpImage.displayHistogram();
+
+        printf("\nWriting to file...\n");
+        retval = bmpImage.writeModifiedImageDataToFile(OUTPUT_IMAGE_PATH);
+        if (retval != 0)
+        {
+            printf("\n>> Failed to create %s\n", OUTPUT_IMAGE_PATH);
+        }
+        else
+        {
+            printf("\n>> Created %s\n", OUTPUT_IMAGE_PATH);
+        }
 
     }//Scope of BitmapImage object ends here
 

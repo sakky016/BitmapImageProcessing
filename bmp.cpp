@@ -452,9 +452,9 @@ void BitmapImage::prepareHistogram()
             pixelValue.green = &m_bitmapImageChar[m_paddedWidth * i + j++];
             pixelValue.red   = &m_bitmapImageChar[m_paddedWidth * i + j++];
 
-            m_redPixelCountMap[*(pixelValue.red)]++;
-            m_greenPixelCountMap[*(pixelValue.blue)]++;
-            m_bluePixelCountMap[*(pixelValue.green)]++;
+            m_redHistogram[*(pixelValue.red)]++;
+            m_greenHistogram[*(pixelValue.blue)]++;
+            m_blueHistogram[*(pixelValue.green)]++;
         }
     }
 }
@@ -476,12 +476,12 @@ void BitmapImage::displayHistogram()
     {
         
         unsigned long scaledDownPixelValueCount = 0;
-        unsigned long redPixelCount   = m_redPixelCountMap[i];
-        unsigned long greenPixelCount = m_greenPixelCountMap[i];
-        unsigned long bluePixelCount  = m_bluePixelCountMap[i];
+        unsigned long redPixelCount   = m_redHistogram[i];
+        unsigned long greenPixelCount = m_greenHistogram[i];
+        unsigned long bluePixelCount  = m_blueHistogram[i];
 
         printf("%03d:", i);
-        scaledDownPixelValueCount = (HISTOGRAM_SCALING_FACTOR * redPixelCount) / m_imageSize;
+        scaledDownPixelValueCount = redPixelCount;// (HISTOGRAM_SCALING_FACTOR * redPixelCount) / m_imageSize;
         for (unsigned long i = 0; i < scaledDownPixelValueCount; i++)
         {
             printf("R");
@@ -489,7 +489,7 @@ void BitmapImage::displayHistogram()
         printf("\n");
 
         printf("%03d:", i);
-        scaledDownPixelValueCount = (HISTOGRAM_SCALING_FACTOR * greenPixelCount) / m_imageSize;
+        scaledDownPixelValueCount = greenPixelCount;// (HISTOGRAM_SCALING_FACTOR * greenPixelCount) / m_imageSize;
         for (unsigned long i = 0; i < scaledDownPixelValueCount; i++)
         {
             printf("G");
@@ -497,7 +497,7 @@ void BitmapImage::displayHistogram()
         printf("\n");
 
         printf("%03d:", i);
-        scaledDownPixelValueCount = (HISTOGRAM_SCALING_FACTOR * bluePixelCount) / m_imageSize;
+        scaledDownPixelValueCount = bluePixelCount;// (HISTOGRAM_SCALING_FACTOR * bluePixelCount) / m_imageSize;
         for (unsigned long i = 0; i < scaledDownPixelValueCount; i++)
         {
             printf("B");
@@ -636,7 +636,97 @@ int BitmapImage::modify1()
             //*pixelValue.blue = 255;
 
         }
+    }
+
+    return 0;
 }
+
+
+//******************************************************************************************
+// @name                    : doHistogramEqualization
+//
+//@description              : Do equalization and save to modified image buffer.
+//
+// @returns                 : return value
+//********************************************************************************************
+int BitmapImage::doHistogramEqualization()
+{
+    int i = 0;
+    int retval = -1;
+
+    this->allocateModifiedImageBuffer();
+
+    // Create a smoother histogram
+    map<int, unsigned long> newRedHistogram;  
+    map<int, unsigned long> newGreenHistogram;
+    map<int, unsigned long> newBlueHistogram; 
+    for (int i = 1; i < MAX_COLORS-1; i++)
+    {
+        newRedHistogram[i]   = (m_redHistogram[i - 1] + m_redHistogram[i] + m_redHistogram[i + 1]) / 3;
+        newGreenHistogram[i] = (m_greenHistogram[i - 1] + m_greenHistogram[i] + m_greenHistogram[i + 1]) / 3;
+        newBlueHistogram[i]  = (m_blueHistogram[i - 1] + m_blueHistogram[i] + m_blueHistogram[i + 1]) / 3;
+    }
+
+    // Replace the original histogram
+    //m_redHistogram   = newRedHistogram;
+    //m_greenHistogram = newGreenHistogram;
+    //m_blueHistogram  = newBlueHistogram;
+
+    unsigned long sumRed = 0;
+    unsigned long sumGreen = 0;
+    unsigned long sumBlue = 0;
+    unsigned long sumOfRedHistogram[MAX_COLORS];
+    unsigned long sumOfGreenHistogram[MAX_COLORS];
+    unsigned long sumOfBlueHistogram[MAX_COLORS];
+
+    for (size_t i = 0; i < MAX_COLORS-2; i++)
+    {
+        sumRed += newRedHistogram[i];
+        sumOfRedHistogram[i] = sumRed;
+
+        sumGreen += newGreenHistogram[i];
+        sumOfGreenHistogram[i] = sumGreen;
+
+        sumBlue += newBlueHistogram[i];
+        sumOfBlueHistogram[i] = sumBlue;
+    }
+
+    // Histogram equalization constant
+    double histogramEqualizationConstantForRed   = (double)(newRedHistogram.size()) / (double)m_imageSize;
+    double histogramEqualizationConstantForGreen = (double)(newGreenHistogram.size()) / (double)m_imageSize;
+    double histogramEqualizationConstantForBlue  = (double)(newBlueHistogram.size()) / (double)m_imageSize;
+
+    for (int i = 0; i < m_bitmapInfoHeader->height; i++)
+    {
+        int j = 0;
+        while (j < m_paddedWidth)
+        {
+            if (j >= (m_bitmapInfoHeader->width * 3))
+            {
+                // Reached end of pixels in a row. Rest of the values
+                // in this row are padding
+                break;
+            }
+
+            pixel_value_t pixelValue;
+            pixelValue.blue = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
+            pixelValue.green = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
+            pixelValue.red = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
+
+            int r = *pixelValue.red;
+            int g = *pixelValue.green;
+            int b = *pixelValue.blue;
+
+            // Do modification to individual pixels here
+            *pixelValue.red   = sumOfRedHistogram[*pixelValue.red] * histogramEqualizationConstantForRed;
+            *pixelValue.green = sumOfGreenHistogram[*pixelValue.green] * histogramEqualizationConstantForGreen;
+            *pixelValue.blue  = sumOfBlueHistogram[*pixelValue.blue] * histogramEqualizationConstantForBlue;
+
+            r = *pixelValue.red;
+            g = *pixelValue.green;
+            b = *pixelValue.blue;
+        }
+    }
 
     return 0;
 }

@@ -133,9 +133,9 @@ private:
     unsigned long m_paddedImageSize;                  // Size of image including padding
     unsigned long m_modifiedImageSize;                // Size of modified image
 
-    map<int, unsigned long> m_redPixelCountMap;       // Map of red-color intensity and number of pixels in that intensity level
-    map<int, unsigned long> m_greenPixelCountMap;     // Map of green-color intensity and number of pixels in that intensity level
-    map<int, unsigned long> m_bluePixelCountMap;      // Map of blue-color intensity and number of pixels in that intensity level
+    map<int, unsigned long> m_redHistogram;           // Map of red-color intensity and number of pixels in that intensity level
+    map<int, unsigned long> m_greenHistogram;         // Map of green-color intensity and number of pixels in that intensity level
+    map<int, unsigned long> m_blueHistogram;          // Map of blue-color intensity and number of pixels in that intensity level
 
     void allocateModifiedImageBuffer();
     void prepareHistogram();
@@ -155,6 +155,7 @@ public:
     void displayHistogram();
     int writeModifiedImageDataToFile(const char *outputFilePath);
     int modify1();
+    int doHistogramEqualization();
 };
 
 
