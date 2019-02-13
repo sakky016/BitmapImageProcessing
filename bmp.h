@@ -103,12 +103,23 @@ typedef struct bitmap_info_header_tag
     char blueIntensity;
 }bitmap_info_header_t;
 
-typedef struct pixel_value_tag
+// Red, Green and Blue color components
+typedef struct pixel_value_rbg_tag
 {
-    unsigned char *red;
-    unsigned char *green;
-    unsigned char *blue;
-}pixel_value_t;
+    unsigned char red;
+    unsigned char green;
+    unsigned char blue;
+}pixel_value_rbg_t;
+
+//In YCbCr, the Y is the brightness (luma), 
+//              Cb is blue minus luma (B-Y) and 
+//              Cr is red minus luma (R-Y)
+typedef struct pixel_value_ycbcr_tag
+{
+    unsigned char y;
+    unsigned char Cb;
+    unsigned char Cr;
+}pixel_value_ycbcr_t;
 
 // ==================================================================================================
 // BitmapImage class definition
@@ -136,6 +147,7 @@ private:
     map<int, unsigned long> m_redHistogram;           // Map of red-color intensity and number of pixels in that intensity level
     map<int, unsigned long> m_greenHistogram;         // Map of green-color intensity and number of pixels in that intensity level
     map<int, unsigned long> m_blueHistogram;          // Map of blue-color intensity and number of pixels in that intensity level
+    map<int, unsigned long> m_brightnessHistogram;    // Map of brightness level (Y) and number of pixels in that intensity level
 
     void allocateModifiedImageBuffer();
     void prepareHistogram();
@@ -154,8 +166,11 @@ public:
     void displayImagePixels();
     void displayHistogram();
     int writeModifiedImageDataToFile(const char *outputFilePath);
-    int modify1();
+    int ConvertToGrayScale();
     int doHistogramEqualization();
+
+    pixel_value_ycbcr_t convertToYCbCr(pixel_value_rbg_t pixelValue);
+    pixel_value_rbg_t convertToRGB(pixel_value_ycbcr_t pixelYCbCr);
 };
 
 

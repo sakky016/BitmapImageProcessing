@@ -5,8 +5,8 @@
 
 using namespace std;
 
-const char* INPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img1.bmp";
-const char* OUTPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img1_modified.bmp";
+const char* INPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img2.bmp";
+const char* OUTPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img2_modified.bmp";
 
 //******************************************************************************************
 // M A I N - for testing purpose.
