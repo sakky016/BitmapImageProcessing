@@ -1,6 +1,8 @@
 #include"bmp.h"
 #include<assert.h>
 
+//#define USE_BRIGHTNESS_LEVEL_FOR_HISTOGRAM_EQUALIZATION
+
 //******************************************************************************************
 // @name                    : CloseFile
 //
@@ -667,90 +669,6 @@ int BitmapImage::ConvertToGrayScale()
 //
 // @returns                 : return value
 //********************************************************************************************
-#if 0
-int BitmapImage::doHistogramEqualization()
-{
-    int i = 0;
-    int retval = -1;
-
-    this->allocateModifiedImageBuffer();
-
-    // Create a smoother histogram
-    map<int, unsigned long> newRedHistogram;  
-    map<int, unsigned long> newGreenHistogram;
-    map<int, unsigned long> newBlueHistogram; 
-    for (int i = 1; i < MAX_COLORS-1; i++)
-    {
-        newRedHistogram[i-1]   = (m_redHistogram[i - 1] + m_redHistogram[i] + m_redHistogram[i + 1]) / 3;
-        newGreenHistogram[i-1] = (m_greenHistogram[i - 1] + m_greenHistogram[i] + m_greenHistogram[i + 1]) / 3;
-        newBlueHistogram[i-1]  = (m_blueHistogram[i - 1] + m_blueHistogram[i] + m_blueHistogram[i + 1]) / 3;
-    }
-
-    // Replace the original histogram
-    //m_redHistogram   = newRedHistogram;
-    //m_greenHistogram = newGreenHistogram;
-    //m_blueHistogram  = newBlueHistogram;
-
-    unsigned long sumRed = 0;
-    unsigned long sumGreen = 0;
-    unsigned long sumBlue = 0;
-    unsigned long sumOfRedHistogram[MAX_COLORS];
-    unsigned long sumOfGreenHistogram[MAX_COLORS];
-    unsigned long sumOfBlueHistogram[MAX_COLORS];
-
-    for (size_t i = 0; i < MAX_COLORS-2; i++)
-    {
-        sumRed += newRedHistogram[i];
-        sumOfRedHistogram[i] = sumRed;
-
-        sumGreen += newGreenHistogram[i];
-        sumOfGreenHistogram[i] = sumGreen;
-
-        sumBlue += newBlueHistogram[i];
-        sumOfBlueHistogram[i] = sumBlue;
-    }
-
-    // Histogram equalization constant
-    double histogramEqualizationConstantForRed   = (double)(newRedHistogram.size()) / (double)m_imageSize;
-    double histogramEqualizationConstantForGreen = (double)(newGreenHistogram.size()) / (double)m_imageSize;
-    double histogramEqualizationConstantForBlue  = (double)(newBlueHistogram.size()) / (double)m_imageSize;
-
-    for (int i = 0; i < m_bitmapInfoHeader->height; i++)
-    {
-        int j = 0;
-        while (j < m_paddedWidth)
-        {
-            if (j >= (m_bitmapInfoHeader->width * 3))
-            {
-                // Reached end of pixels in a row. Rest of the values
-                // in this row are padding
-                break;
-            }
-
-            pixel_value_rbg_t pixelValue;
-            pixelValue.blue = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
-            pixelValue.green = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
-            pixelValue.red = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
-
-            int r = *pixelValue.red;
-            int g = *pixelValue.green;
-            int b = *pixelValue.blue;
-
-            // Do modification to individual pixels here
-            *pixelValue.red   = static_cast<unsigned char>(sumOfRedHistogram[*pixelValue.red] * histogramEqualizationConstantForRed);
-            *pixelValue.green = static_cast<unsigned char>(sumOfGreenHistogram[*pixelValue.green] * histogramEqualizationConstantForGreen);
-            *pixelValue.blue  = static_cast<unsigned char>(sumOfBlueHistogram[*pixelValue.blue] * histogramEqualizationConstantForBlue);
-
-            r = *pixelValue.red;
-            g = *pixelValue.green;
-            b = *pixelValue.blue;
-            b = *pixelValue.blue;
-        }
-    }
-
-    return 0;
-}
-#endif
 int BitmapImage::doHistogramEqualization()
 {
     int i = 0;
@@ -848,9 +766,38 @@ pixel_value_ycbcr_t BitmapImage::convertToYCbCr(pixel_value_rbg_t pixelValue)
     int g = pixelValue.green;
     int b = pixelValue.blue;
 
-    pixelYCbCr.y = ((0.299 * r) + (0.587 * g) + (0.114 * b));
+    /*pixelYCbCr.y = ((0.299 * r) + (0.587 * g) + (0.114 * b));
     pixelYCbCr.Cb = 128 - ((0.168736 * r) - (0.331364 * g) + (0.5 * b));
-    pixelYCbCr.Cr = 128 + ((0.5 * r) - (0.418688 * g) - (0.081312 * b));
+    pixelYCbCr.Cr = 128 + ((0.5 * r) - (0.418688 * g) - (0.081312 * b));*/
+
+    // As per Recommendation ITU-R BT.601”[6]
+    int y = ((0.257 * r) + (0.504 * g) + (0.098 * b) + 16);
+    int Cb = ((-0.148 * r) - (0.291 * g) + (0.439 * b) + 128);
+    int Cr = ((0.439 * r) - (0.386 * g) - (0.071 * b) + 128);
+
+    // Clamping on YCbCr values
+    if (y > MAX_COLORS - 1)
+        y = MAX_COLORS - 1;
+
+    if (y < 0)
+        y = 0;
+
+    if (Cb > MAX_COLORS - 1)
+        Cb = MAX_COLORS - 1;
+
+    if (Cb < 0)
+        Cb = 0;
+
+    if (Cr > MAX_COLORS - 1)
+        Cr = MAX_COLORS - 1;
+
+    if (Cr < 0)
+        Cr = 0;
+
+    // Use clamped values
+    pixelYCbCr.y = y;
+    pixelYCbCr.Cb = Cb;
+    pixelYCbCr.Cr = Cr;
 
     return pixelYCbCr;
 }
@@ -862,10 +809,33 @@ pixel_value_rbg_t BitmapImage::convertToRGB(pixel_value_ycbcr_t pixelYCbCr)
     int Cb = pixelYCbCr.Cb;
     int Cr = pixelYCbCr.Cr;
 
-
-    pixelValue.red = y + 1.402 * (Cr - 128);
+    /*pixelValue.red = y + 1.402 * (Cr - 128);
     pixelValue.green = y - 0.34414 * (Cb - 128) - 0.71414 * (Cr - 128);
-    pixelValue.blue = y + 1.772 * (Cb - 128);
+    pixelValue.blue = y + 1.772 * (Cb - 128);*/
+
+    // As per Recommendation ITU-R BT.601”[6]
+    pixelValue.red = (1.164 * (y - 16)) + (1.596 * (Cr - 128));
+    pixelValue.green = (1.164 * (y - 16)) - (0.391 * (Cb - 128)) - (0.813 * (Cr - 128));
+    pixelValue.blue = (1.164 * (y - 16)) + (2.018 * (Cb - 128));
+
+    // Clamping on RGB values
+    if (pixelValue.red > MAX_COLORS - 1)
+        pixelValue.red = MAX_COLORS - 1;
+
+    if (pixelValue.red < 0)
+        pixelValue.red = 0;
+
+    if (pixelValue.green > MAX_COLORS - 1)
+        pixelValue.green = MAX_COLORS - 1;
+
+    if (pixelValue.green < 0)
+        pixelValue.green = 0;
+
+    if (pixelValue.blue > MAX_COLORS - 1)
+        pixelValue.blue = MAX_COLORS - 1;
+
+    if (pixelValue.blue < 0)
+        pixelValue.blue = 0;
 
     return pixelValue;
 }

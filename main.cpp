@@ -5,8 +5,8 @@
 
 using namespace std;
 
-const char* INPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img2.bmp";
-const char* OUTPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img2_modified.bmp";
+const char* INPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img15.bmp";
+const char* OUTPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img15_modified.bmp";
 
 //******************************************************************************************
 // M A I N - for testing purpose.
@@ -19,9 +19,10 @@ int main()
         BitmapImage bmpImage(INPUT_IMAGE_PATH);
 
         bmpImage.displayImageDetails();
+
 #if 0
-        bmpImage.displayImagePixels();
-        retval = bmpImage.modify1();
+        //bmpImage.displayImagePixels();
+        retval = bmpImage.ConvertToGrayScale();
         if (retval != 0)
         {
             printf("\nERROR: Image modification failed!\n");
@@ -39,7 +40,7 @@ int main()
         }
 #endif
         //bmpImage.displayHistogram();
-
+#if 1
         printf("\n\nDoing histogram equalization...\n");
         bmpImage.doHistogramEqualization();
         //bmpImage.displayHistogram();
@@ -54,7 +55,7 @@ int main()
         {
             printf("\n>> Created %s\n", OUTPUT_IMAGE_PATH);
         }
-
+#endif
     }//Scope of BitmapImage object ends here
 
     getchar();
