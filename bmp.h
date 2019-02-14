@@ -13,8 +13,16 @@ const int BITMAP_FILE_HEADER_SIZE = 14;
 const int BITMAP_INFO_HEADER_SIZE = 40;
 const int BITMAP_HEADER_SIZE = BITMAP_FILE_HEADER_SIZE + BITMAP_INFO_HEADER_SIZE;
 const int COLOR_TABLE_SIZE = 1024;
-const int MAX_COLORS = 256;
 const unsigned long HISTOGRAM_SCALING_FACTOR = 10000;
+
+const int MAX_COLORS = 256;
+const int MIN_COLORS = 0;
+
+const int Y_MIN = 16;   // For Y of YCbCr
+const int Y_MAX = 235;
+
+const int C_MAX = 240;   // For Cb and Cr of YCbCr
+const int C_MIN = 16;
 
 // ==================================================================================================
 // Enums
@@ -104,12 +112,12 @@ typedef struct bitmap_info_header_tag
 }bitmap_info_header_t;
 
 // Red, Green and Blue color components
-typedef struct pixel_value_rbg_tag
+typedef struct pixel_value_rgb_tag
 {
     unsigned char red;
     unsigned char green;
     unsigned char blue;
-}pixel_value_rbg_t;
+}pixel_value_rgb_t;
 
 //In YCbCr, the Y is the brightness (luma), 
 //              Cb is blue minus luma (B-Y) and 
@@ -151,6 +159,8 @@ private:
 
     void allocateModifiedImageBuffer();
     void prepareHistogram();
+    pixel_value_rgb_t findAveragePixelValuesRGB(int idx_i, int idx_j); // For RGB image
+    unsigned char findAveragePixelValuesGrayscale(int idx_i, int idx_j);     // For grayscale image
 
 public:
     BitmapImage(const char *imagePath);
@@ -168,9 +178,9 @@ public:
     int writeModifiedImageDataToFile(const char *outputFilePath);
     int ConvertToGrayScale();
     int doHistogramEqualization();
-
-    pixel_value_ycbcr_t convertToYCbCr(pixel_value_rbg_t pixelValue);
-    pixel_value_rbg_t convertToRGB(pixel_value_ycbcr_t pixelYCbCr);
+    int DoImageBlur();
+    pixel_value_ycbcr_t convertToYCbCr(pixel_value_rgb_t pixelValue);
+    pixel_value_rgb_t convertToRGB(pixel_value_ycbcr_t pixelYCbCr);
 };
 
 

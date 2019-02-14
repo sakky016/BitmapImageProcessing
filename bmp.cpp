@@ -2,6 +2,8 @@
 #include<assert.h>
 
 //#define USE_BRIGHTNESS_LEVEL_FOR_HISTOGRAM_EQUALIZATION
+//#define USE_BRIGHTNESS_LEVEL_FOR_BLURRING
+#define USE_ITU_CONVERSION_FOR_YCBCR
 
 //******************************************************************************************
 // @name                    : CloseFile
@@ -448,7 +450,7 @@ void BitmapImage::prepareHistogram()
                 break;
             }
 
-            pixel_value_rbg_t pixel_value_rgb;
+            pixel_value_rgb_t pixel_value_rgb;
             pixel_value_rgb.blue  = m_bitmapImageChar[m_paddedWidth * i + j++];
             pixel_value_rgb.green = m_bitmapImageChar[m_paddedWidth * i + j++];
             pixel_value_rgb.red   = m_bitmapImageChar[m_paddedWidth * i + j++];
@@ -459,7 +461,7 @@ void BitmapImage::prepareHistogram()
             m_blueHistogram[pixel_value_rgb.blue]++;
 
             // Brightness histogram
-            pixel_value_ycbcr_t pixel_value_ycbcr;
+            pixel_value_ycbcr_t pixel_value_ycbcr = { 0 };
             pixel_value_ycbcr = convertToYCbCr(pixel_value_rgb);
 
             m_brightnessHistogram[pixel_value_ycbcr.y]++;
@@ -641,12 +643,12 @@ int BitmapImage::ConvertToGrayScale()
             green = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
             red   = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
 
-            pixel_value_rbg_t pixel_value_rgb;
+            pixel_value_rgb_t pixel_value_rgb = { 0 };
             pixel_value_rgb.red = *red;
             pixel_value_rgb.green = *green;
             pixel_value_rgb.blue = *blue;
 
-            pixel_value_ycbcr_t pixel_value_ycbcr;
+            pixel_value_ycbcr_t pixel_value_ycbcr = { 0 };
 
             pixel_value_ycbcr = convertToYCbCr(pixel_value_rgb);
 
@@ -729,14 +731,14 @@ int BitmapImage::doHistogramEqualization()
             green = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
             red   = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
 
-            pixel_value_rbg_t pixel_value_rgb;
+            pixel_value_rgb_t pixel_value_rgb = { 0 };
             pixel_value_rgb.red = *red;
             pixel_value_rgb.green = *green;
             pixel_value_rgb.blue = *blue;
 
 #ifdef USE_BRIGHTNESS_LEVEL_FOR_HISTOGRAM_EQUALIZATION
             // Obtain brightness level and do equalization on that.
-            pixel_value_ycbcr_t pixel_value_ycbcr;
+            pixel_value_ycbcr_t pixel_value_ycbcr = { 0 };
             pixel_value_ycbcr = convertToYCbCr(pixel_value_rgb);
             unsigned char brightness = pixel_value_ycbcr.y;
             brightness = cdfBrightness[brightness] * (MAX_COLORS - 1);
@@ -759,40 +761,55 @@ int BitmapImage::doHistogramEqualization()
     return 0;
 }
 
-pixel_value_ycbcr_t BitmapImage::convertToYCbCr(pixel_value_rbg_t pixelValue)
+//******************************************************************************************
+// @name                    : convertToYCbCr
+//
+// @description             : Convert from RGB to YCbCr
+//
+// @param pixelValue        : RGB pixel values
+//
+// @returns                 : YCbCr component
+//********************************************************************************************
+pixel_value_ycbcr_t BitmapImage::convertToYCbCr(pixel_value_rgb_t pixelValue)
 {
-    pixel_value_ycbcr_t pixelYCbCr;
+    pixel_value_ycbcr_t pixelYCbCr = { 0 };
     int r = pixelValue.red;
     int g = pixelValue.green;
     int b = pixelValue.blue;
 
-    /*pixelYCbCr.y = ((0.299 * r) + (0.587 * g) + (0.114 * b));
-    pixelYCbCr.Cb = 128 - ((0.168736 * r) - (0.331364 * g) + (0.5 * b));
-    pixelYCbCr.Cr = 128 + ((0.5 * r) - (0.418688 * g) - (0.081312 * b));*/
-
+#ifdef USE_ITU_CONVERSION_FOR_YCBCR
     // As per Recommendation ITU-R BT.601”[6]
-    int y = ((0.257 * r) + (0.504 * g) + (0.098 * b) + 16);
-    int Cb = ((-0.148 * r) - (0.291 * g) + (0.439 * b) + 128);
-    int Cr = ((0.439 * r) - (0.386 * g) - (0.071 * b) + 128);
+    int y = 16 + ((0.257 * r) + (0.504 * g) + (0.098 * b));
+    int Cb = 128 + ((-0.148 * r) - (0.291 * g) + (0.439 * b));
+    int Cr = 128 + ((0.439 * r) - (0.368 * g) - (0.071 * b));
+#else
+    // As per http://www.mir.com/DMG/ycbcr.html
+    int y = 16 + ((0.299 * r) + (0.587 * g) + (0.114 * b));
+    int Cb = 128 + ((-0.168736 * r) - (0.331364 * g) + (0.5 * b));
+    int Cr = 128 + ((0.5 * r) - (0.418688 * g) - (0.081312 * b));
+    
+#endif
 
+#if 1
     // Clamping on YCbCr values
-    if (y > MAX_COLORS - 1)
-        y = MAX_COLORS - 1;
+    if (y > Y_MAX)
+        y = Y_MAX;
 
-    if (y < 0)
-        y = 0;
+    if (y < Y_MIN)
+        y = Y_MIN;
 
-    if (Cb > MAX_COLORS - 1)
-        Cb = MAX_COLORS - 1;
+    if (Cb > C_MAX)
+        Cb = C_MAX;
 
-    if (Cb < 0)
-        Cb = 0;
+    if (Cb < C_MIN)
+        Cb = C_MIN;
 
-    if (Cr > MAX_COLORS - 1)
-        Cr = MAX_COLORS - 1;
+    if (Cr > C_MAX)
+        Cr = C_MAX;
 
-    if (Cr < 0)
-        Cr = 0;
+    if (Cr < C_MIN)
+        Cr = C_MIN;
+#endif 
 
     // Use clamped values
     pixelYCbCr.y = y;
@@ -802,40 +819,210 @@ pixel_value_ycbcr_t BitmapImage::convertToYCbCr(pixel_value_rbg_t pixelValue)
     return pixelYCbCr;
 }
 
-pixel_value_rbg_t BitmapImage::convertToRGB(pixel_value_ycbcr_t pixelYCbCr)
+//******************************************************************************************
+// @name                    : convertToRGB
+//
+// @description             : Convert from YCbCr to RGB
+//
+// @param pixelValue        : YCbCr pixel values
+//
+// @returns                 : RGB component
+//********************************************************************************************
+pixel_value_rgb_t BitmapImage::convertToRGB(pixel_value_ycbcr_t pixelYCbCr)
 {
-    pixel_value_rbg_t pixelValue;
+    pixel_value_rgb_t pixelValue = { 0 };
     int y = pixelYCbCr.y;
     int Cb = pixelYCbCr.Cb;
     int Cr = pixelYCbCr.Cr;
 
-    /*pixelValue.red = y + 1.402 * (Cr - 128);
-    pixelValue.green = y - 0.34414 * (Cb - 128) - 0.71414 * (Cr - 128);
-    pixelValue.blue = y + 1.772 * (Cb - 128);*/
-
+#ifdef USE_ITU_CONVERSION_FOR_YCBCR
     // As per Recommendation ITU-R BT.601”[6]
-    pixelValue.red = (1.164 * (y - 16)) + (1.596 * (Cr - 128));
-    pixelValue.green = (1.164 * (y - 16)) - (0.391 * (Cb - 128)) - (0.813 * (Cr - 128));
-    pixelValue.blue = (1.164 * (y - 16)) + (2.018 * (Cb - 128));
+    int r = (1.164 * (y - 16)) + (1.596 * (Cr - 128));
+    int g = (1.164 * (y - 16)) + (-0.392 * (Cb - 128)) + (-0.813 * (Cr - 128));
+    int b = (1.164 * (y - 16)) + (2.017 * (Cb - 128));
+
+#else
+    // As per http://www.mir.com/DMG/ycbcr.html
+    int r = y + (1.402 * Cr);
+    int g = y - (0.344136 * Cb) - (0.714136 * Cr);
+    int b = y + (1.772 * Cb);
+#endif
 
     // Clamping on RGB values
-    if (pixelValue.red > MAX_COLORS - 1)
-        pixelValue.red = MAX_COLORS - 1;
+    if (r > MAX_COLORS - 1)
+        r = MAX_COLORS - 1;
 
-    if (pixelValue.red < 0)
-        pixelValue.red = 0;
+    if (r < MIN_COLORS)
+        r = MIN_COLORS;
 
-    if (pixelValue.green > MAX_COLORS - 1)
-        pixelValue.green = MAX_COLORS - 1;
+    if (g > MAX_COLORS - 1)
+        g = MAX_COLORS - 1;
+        
+    if (g < MIN_COLORS)
+        g = MIN_COLORS;
 
-    if (pixelValue.green < 0)
-        pixelValue.green = 0;
+    if (b > MAX_COLORS - 1)
+        b = MAX_COLORS - 1;
+        
+    if (b < MIN_COLORS)
+        b = MIN_COLORS;
 
-    if (pixelValue.blue > MAX_COLORS - 1)
-        pixelValue.blue = MAX_COLORS - 1;
-
-    if (pixelValue.blue < 0)
-        pixelValue.blue = 0;
+    pixelValue.red = r;
+    pixelValue.green = g;
+    pixelValue.blue = b;
 
     return pixelValue;
+}
+
+//******************************************************************************************
+// @name                    : DoImageBlur
+//
+//@description              : Blurs an image
+//
+// @returns                 : 0 if SUCCESS
+//********************************************************************************************
+int BitmapImage::DoImageBlur()
+{
+    int i = 0;
+    int retval = -1;
+
+    this->allocateModifiedImageBuffer();
+
+    for (int i = 0; i < m_bitmapInfoHeader->height; i++)
+    {
+        int j = 0;
+        while (j < m_paddedWidth)
+        {
+            if (j >= (m_bitmapInfoHeader->width * 3))
+            {
+                // Reached end of pixels in a row. Rest of the values
+                // in this row are padding
+                break;
+            }
+
+            
+#ifdef USE_BRIGHTNESS_LEVEL_FOR_BLURRING            
+            unsigned char averageBrightness = findAveragePixelValuesGrayscale(i, j);
+#else
+            pixel_value_rgb_t avgPixelValues = findAveragePixelValuesRGB(i, j);
+#endif
+
+            unsigned char* red;
+            unsigned char* green;
+            unsigned char* blue;
+
+            blue  = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
+            green = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
+            red   = &m_modifiedBitmapImageChar[m_paddedWidth * i + j++];
+
+#ifdef USE_BRIGHTNESS_LEVEL_FOR_BLURRING 
+            pixel_value_rgb_t pixel_value_rgb = { 0 };
+            pixel_value_rgb.red = *red;
+            pixel_value_rgb.blue = *blue;
+            pixel_value_rgb.green = *green;
+
+            pixel_value_ycbcr_t pixel_value_ycbcr = { 0 };
+            pixel_value_ycbcr = convertToYCbCr(pixel_value_rgb);
+
+            pixel_value_ycbcr.y = averageBrightness;
+            pixel_value_rgb = convertToRGB(pixel_value_ycbcr);
+
+            // Do modification to individual pixels here
+            *red = pixel_value_rgb.red;
+            *green = pixel_value_rgb.blue;
+            *blue = pixel_value_rgb.green;
+#else
+            // Do modification to individual pixels here
+            *red = avgPixelValues.red;
+            *green = avgPixelValues.blue;
+            *blue = avgPixelValues.green;
+#endif
+        }
+    }
+
+    return 0;
+}
+
+pixel_value_rgb_t BitmapImage::findAveragePixelValuesRGB(int idx_i, int idx_j)
+{
+    pixel_value_rgb_t averagePixelValue = { 0 };
+    unsigned long red = 0;
+    unsigned long  green = 0;
+    unsigned long blue = 0;
+    unsigned long rgbPixels = 0;
+
+    for (int i = -1; i <= 1; i++)
+    {
+        for (int j = -1; j <= 1; j++)
+        {
+            if ((idx_i + i > 0) && (idx_i + i < m_bitmapInfoHeader->height) &&
+                (idx_j + j > 0) && (idx_j + j < (m_bitmapInfoHeader->width * 3)))
+            {
+                if (i == 0 && j == 0)
+                {
+                    continue;
+                }
+
+                blue += m_modifiedBitmapImageChar[(m_paddedWidth * (idx_i + i)) + (idx_j + j)];
+                j++;
+                green += m_modifiedBitmapImageChar[(m_paddedWidth * (idx_i + i)) + (idx_j + j)];
+                j++;
+                red += m_modifiedBitmapImageChar[(m_paddedWidth * (idx_i + i)) + (idx_j + j)];
+
+                rgbPixels++;
+            }
+        }
+    }
+    
+    averagePixelValue.red   = red / rgbPixels;
+    averagePixelValue.green = green / rgbPixels;
+    averagePixelValue.blue  = blue / rgbPixels;
+
+    return averagePixelValue;
+}
+
+unsigned char BitmapImage::findAveragePixelValuesGrayscale(int idx_i, int idx_j)
+{
+    unsigned char averagePixelValue = 0;
+    unsigned char red = 0;
+    unsigned char  green = 0;
+    unsigned char blue = 0;
+    unsigned long pixels = 0;
+    unsigned long brightness = 0;
+
+    for (int i = -1; i <= 1; i++)
+    {
+        for (int j = -1; j <= 1; j++)
+        {
+            if ((idx_i + i > 0) && (idx_i + i < m_bitmapInfoHeader->height) &&
+                (idx_j + j > 0) && (idx_j + j < (m_bitmapInfoHeader->width * 3)))
+            {
+                if (i == 0 && j == 0)
+                {
+                    continue;
+                }
+
+                blue = m_modifiedBitmapImageChar[(m_paddedWidth * (idx_i + i)) + (idx_j + j)];
+                j++;
+                green = m_modifiedBitmapImageChar[(m_paddedWidth * (idx_i + i)) + (idx_j + j)];
+                j++;
+                red = m_modifiedBitmapImageChar[(m_paddedWidth * (idx_i + i)) + (idx_j + j)];
+
+                pixel_value_rgb_t pixel_value_rgb = { 0 };
+                pixel_value_rgb.red = red;
+                pixel_value_rgb.blue = blue;
+                pixel_value_rgb.green = green;
+
+                pixel_value_ycbcr_t pixel_value_ycbcr = { 0 };
+                pixel_value_ycbcr = convertToYCbCr(pixel_value_rgb);
+                brightness += pixel_value_ycbcr.y;
+
+                pixels++;
+            }
+        }
+    }
+
+    averagePixelValue = brightness / pixels;
+
+    return averagePixelValue;
 }

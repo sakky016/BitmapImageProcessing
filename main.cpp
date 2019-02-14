@@ -5,8 +5,8 @@
 
 using namespace std;
 
-const char* INPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img15.bmp";
-const char* OUTPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img15_modified.bmp";
+const char* INPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img2.bmp";
+const char* OUTPUT_IMAGE_PATH = "C:\\Users\\m0pxnn\\Desktop\\ImageTestFiles\\img2_modified.bmp";
 
 //******************************************************************************************
 // M A I N - for testing purpose.
@@ -20,31 +20,15 @@ int main()
 
         bmpImage.displayImageDetails();
 
-#if 0
         //bmpImage.displayImagePixels();
-        retval = bmpImage.ConvertToGrayScale();
-        if (retval != 0)
-        {
-            printf("\nERROR: Image modification failed!\n");
-        }
-
-        printf("\nWriting to file...\n");
-        retval = bmpImage.writeModifiedImageDataToFile(OUTPUT_IMAGE_PATH);
-        if (retval != 0)
-        {
-            printf("\n>> Failed to create %s\n", OUTPUT_IMAGE_PATH);
-        }
-        else
-        {
-            printf("\n>> Created %s\n", OUTPUT_IMAGE_PATH);
-        }
-#endif
+        //retval = bmpImage.ConvertToGrayScale();
         //bmpImage.displayHistogram();
-#if 1
         printf("\n\nDoing histogram equalization...\n");
         bmpImage.doHistogramEqualization();
+        //retval = bmpImage.ConvertToGrayScale();
         //bmpImage.displayHistogram();
-
+        //bmpImage.DoImageBlur();
+        
         printf("\nWriting to file...\n");
         retval = bmpImage.writeModifiedImageDataToFile(OUTPUT_IMAGE_PATH);
         if (retval != 0)
@@ -55,7 +39,6 @@ int main()
         {
             printf("\n>> Created %s\n", OUTPUT_IMAGE_PATH);
         }
-#endif
     }//Scope of BitmapImage object ends here
 
     getchar();
